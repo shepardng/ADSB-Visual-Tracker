@@ -1,0 +1,30 @@
+{
+  "location": {
+    "latitude": 40.7128,
+    "longitude": -74.0060,
+    "radius_km": 150
+  },
+  "data_source": {
+    "type": "opensky",
+    "dump1090_host": "localhost",
+    "dump1090_port": 8080,
+    "opensky_username": "",
+    "opensky_password": "",
+    "poll_interval_seconds": 10
+  },
+  "display": {
+    "theme": "dark",
+    "show_trails": true,
+    "trail_length": 10,
+    "show_labels": true,
+    "label_fields": ["callsign", "altitude", "speed"],
+    "ceiling_flip_vertical": false,
+    "ceiling_rotate_180": false,
+    "zoom_level": 9
+  },
+  "filters": {
+    "min_altitude_ft": 0,
+    "max_altitude_ft": 60000,
+    "show_ground_vehicles": false
+  }
+}
