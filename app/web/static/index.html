@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ADS-B Visual Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <!-- ================================================================
+       Header bar — hidden in presentation mode
+  ================================================================ -->
+  <header id="header">
+    <div class="header-left">
+      <span class="app-title">ADS-B Visual Tracker</span>
+      <span id="aircraft-count" class="badge">0 aircraft</span>
+      <span id="status-dot" class="status-dot status-unknown" title="Connecting…"></span>
+      <span id="last-update" class="last-update"></span>
+    </div>
+    <div class="header-right">
+      <button class="btn" id="btn-config" onclick="toggleConfig()">&#9881; Config</button>
+      <button class="btn btn-primary" id="btn-present" onclick="enterPresentationMode()">&#9654; Present</button>
+    </div>
+  </header>
+
+  <!-- ================================================================
+       Main layout: map + config panel side-by-side
+  ================================================================ -->
+  <div id="app-container">
+
+    <!-- Map -->
+    <div id="map-wrapper">
+      <div id="map"></div>
+    </div>
+
+    <!-- Config panel -->
+    <aside id="config-panel" class="hidden" aria-label="Configuration">
+      <div class="config-header">
+        <h2>Configuration</h2>
+        <button class="btn btn-icon" onclick="toggleConfig()" title="Close">&#10005;</button>
+      </div>
+
+      <!-- Location -->
+      <section class="config-section">
+        <h3>Location</h3>
+        <label class="field-label">
+          Latitude
+          <input type="number" id="cfg-lat" step="0.0001" min="-90" max="90" placeholder="40.7128">
+        </label>
+        <label class="field-label">
+          Longitude
+          <input type="number" id="cfg-lon" step="0.0001" min="-180" max="180" placeholder="-74.0060">
+        </label>
+        <label class="field-label">
+          Radius (km)
+          <input type="number" id="cfg-radius" min="10" max="2000" placeholder="150">
+        </label>
+      </section>
+
+      <!-- Data source -->
+      <section class="config-section">
+        <h3>Data Source</h3>
+        <label class="field-label">
+          Source
+          <select id="cfg-source" onchange="onSourceChange()">
+            <option value="opensky">OpenSky Network (API)</option>
+            <option value="dump1090">dump1090 (RTL-SDR)</option>
+          </select>
+        </label>
+
+        <div id="dump1090-settings" class="sub-settings hidden">
+          <label class="field-label">
+            dump1090 Host
+            <input type="text" id="cfg-d1090-host" placeholder="localhost">
+          </label>
+          <label class="field-label">
+            dump1090 Port
+            <input type="number" id="cfg-d1090-port" min="1" max="65535" placeholder="8080">
+          </label>
+        </div>
+
+        <div id="opensky-settings" class="sub-settings">
+          <label class="field-label">
+            OpenSky Username <span class="hint">(optional)</span>
+            <input type="text" id="cfg-osky-user" autocomplete="username" placeholder="leave blank for anonymous">
+          </label>
+          <label class="field-label">
+            OpenSky Password <span class="hint">(optional)</span>
+            <input type="password" id="cfg-osky-pass" autocomplete="current-password">
+          </label>
+        </div>
+
+        <label class="field-label">
+          Poll Interval (seconds)
+          <input type="number" id="cfg-poll" min="5" max="120" placeholder="10">
+        </label>
+      </section>
+
+      <!-- Display -->
+      <section class="config-section">
+        <h3>Display</h3>
+        <label class="field-label">
+          Theme
+          <select id="cfg-theme">
+            <option value="dark">Dark (Projector)</option>
+            <option value="light">Light</option>
+          </select>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="cfg-trails"> Show trails
+        </label>
+        <label class="field-label">
+          Trail length (positions)
+          <input type="number" id="cfg-trail-len" min="1" max="50" placeholder="10">
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="cfg-labels"> Show labels
+        </label>
+        <label class="field-label">
+          Zoom level
+          <div class="zoom-row">
+            <input type="range" id="cfg-zoom" min="4" max="16" step="1">
+            <span id="cfg-zoom-val">9</span>
+          </div>
+        </label>
+      </section>
+
+      <!-- Ceiling projection -->
+      <section class="config-section">
+        <h3>Ceiling Projection</h3>
+        <p class="hint">Apply when using a projector aimed at your ceiling.</p>
+        <label class="toggle-row">
+          <input type="checkbox" id="cfg-flip-v">
+          Flip vertically <span class="hint">(projector pointing straight up)</span>
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="cfg-rot-180">
+          Rotate 180° <span class="hint">(projector mounted upside-down)</span>
+        </label>
+      </section>
+
+      <!-- Filters -->
+      <section class="config-section">
+        <h3>Altitude Filters</h3>
+        <label class="field-label">
+          Minimum altitude (ft)
+          <input type="number" id="cfg-min-alt" min="0" placeholder="0">
+        </label>
+        <label class="field-label">
+          Maximum altitude (ft)
+          <input type="number" id="cfg-max-alt" max="100000" placeholder="60000">
+        </label>
+        <label class="toggle-row">
+          <input type="checkbox" id="cfg-ground"> Show ground vehicles
+        </label>
+      </section>
+
+      <!-- Actions -->
+      <section class="config-section config-actions">
+        <button class="btn btn-primary" onclick="saveConfig()">&#10003; Save Settings</button>
+        <button class="btn" onclick="recenterMap()">&#8982; Re-center Map</button>
+        <button class="btn" onclick="startTileCache()" id="btn-cache">&#8987; Pre-cache Tiles</button>
+      </section>
+
+      <div id="config-msg" class="config-msg hidden"></div>
+
+      <!-- Tile cache progress -->
+      <div id="cache-progress" class="cache-progress hidden">
+        <div class="progress-label">Caching tiles… <span id="cache-pct">0%</span></div>
+        <div class="progress-bar-outer"><div id="progress-bar" class="progress-bar-inner"></div></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Presentation mode exit hint -->
+  <div id="present-hint" class="present-hint hidden">
+    Press <kbd>P</kbd> or <kbd>Esc</kbd> to exit presentation mode
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN/WLs=" crossorigin=""></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"
+          integrity="sha384-mZLF4UVrpi/QTWPA7BjNPEnkIfRFn4ZEO3Qt/HFklTJBj/gBOV8G3HcKn4NfQbl" crossorigin="anonymous"></script>
+  <script src="/static/js/map.js"></script>
+  <script src="/static/js/socket.js"></script>
+  <script src="/static/js/config_panel.js"></script>
+  <script src="/static/js/main.js"></script>
+</body>
+</html>
