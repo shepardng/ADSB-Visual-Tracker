@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(python:*)",
+      "Bash(powershell -Command \"& { \\\\$null = [System.Management.Automation.Language.Parser]::ParseFile\\('C:\\\\\\\\Repos\\\\\\\\ADSB-Visual-Tracker\\\\\\\\setup.ps1', [ref]\\\\$null, [ref]\\\\$errors\\); if \\(\\\\$errors\\) { \\\\$errors } else { 'No syntax errors found.' } }\")",
+      "Bash(start \"\" python main.py)",
+      "Bash(curl -s http://localhost:5000 -o /dev/null -w \"%{http_code}\")"
+    ]
+  }
+}
