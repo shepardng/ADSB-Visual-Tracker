@@ -4,6 +4,12 @@
 
 'use strict';
 
+// Namespace for cross-module callbacks — defined first so config_panel.js
+// can safely call Main.onConfigSaved() even before the IIFE resolves.
+const Main = {
+  onConfigSaved: () => {},
+};
+
 // Expose global callbacks referenced from HTML onclick attributes
 let toggleConfig, enterPresentationMode, exitPresentationMode,
     saveConfig, recenterMap, startTileCache, onSourceChange;
@@ -22,8 +28,8 @@ let toggleConfig, enterPresentationMode, exitPresentationMode,
   _applyThemeClass(cfg.display.theme);
 
   // Init map
-  Map.init(cfg);
-  Map.applyProjectionTransform(
+  AircraftMap.init(cfg);
+  AircraftMap.applyProjectionTransform(
     cfg.display.ceiling_flip_vertical,
     cfg.display.ceiling_rotate_180
   );
@@ -121,7 +127,7 @@ let toggleConfig, enterPresentationMode, exitPresentationMode,
 
   recenterMap = function () {
     const c = ConfigPanel.getConfig();
-    if (c) Map.recenter(c);
+    if (c) AircraftMap.recenter(c);
   };
 
   // ----------------------------------------------------------------
@@ -129,9 +135,9 @@ let toggleConfig, enterPresentationMode, exitPresentationMode,
   // ----------------------------------------------------------------
   Main.onConfigSaved = function (newCfg) {
     SocketClient.updateConfig(newCfg);
-    Map.recenter(newCfg);
-    Map.applyTheme(newCfg.display.theme);
-    Map.applyProjectionTransform(
+    AircraftMap.recenter(newCfg);
+    AircraftMap.applyTheme(newCfg.display.theme);
+    AircraftMap.applyProjectionTransform(
       newCfg.display.ceiling_flip_vertical,
       newCfg.display.ceiling_rotate_180
     );
@@ -148,5 +154,3 @@ let toggleConfig, enterPresentationMode, exitPresentationMode,
   }
 })();
 
-// Namespace for cross-module callbacks
-const Main = {};

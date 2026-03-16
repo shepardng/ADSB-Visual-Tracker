@@ -43,7 +43,7 @@ const SocketClient = (() => {
 
       // Forward to map
       if (_config) {
-        Map.update(data.aircraft, _config);
+        AircraftMap.update(data.aircraft, _config);
       }
     });
 
