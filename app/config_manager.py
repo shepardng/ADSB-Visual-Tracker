@@ -15,6 +15,8 @@ DEFAULT_CONFIG = {
         "type": "opensky",
         "dump1090_host": "localhost",
         "dump1090_port": 8080,
+        "opensky_client_id": "",
+        "opensky_client_secret": "",
         "opensky_username": "",
         "opensky_password": "",
         "poll_interval_seconds": 10

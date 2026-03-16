@@ -41,22 +41,65 @@ def _clear_token():
     _token_username = None
 
 
-def _get_token(username, password):
-    """Return a valid OAuth 2.0 bearer token, refreshing or re-authenticating as needed."""
+def _get_token(username, password, client_id='', client_secret=''):
+    """Return a valid OAuth 2.0 bearer token, refreshing or re-authenticating as needed.
+
+    Prefers Client Credentials grant when client_id and client_secret are provided.
+    Falls back to Resource Owner Password Credentials grant when only username/password are set.
+    """
     global _access_token, _token_expiry, _refresh_token, _token_username
 
     now = time.time()
+    cache_key = client_id or username
 
     with _token_lock:
-        # If credentials changed, discard the cached token
-        if _token_username != username:
+        # Discard cached token if the identity changed
+        if _token_username != cache_key:
             _clear_token()
 
         # Return cached token if still valid (30 s safety margin)
         if _access_token and now < _token_expiry - 30:
             return _access_token
 
-        # Try refresh token first (avoids sending the password again)
+        # --- Client Credentials grant (preferred when client_id+secret available) ---
+        if client_id and client_secret:
+            # Try refresh token first if we have one
+            if _refresh_token:
+                try:
+                    resp = requests.post(OPENSKY_TOKEN_URL, data={
+                        'client_id': client_id,
+                        'client_secret': client_secret,
+                        'grant_type': 'refresh_token',
+                        'refresh_token': _refresh_token,
+                    }, timeout=10)
+                    if resp.ok:
+                        td = resp.json()
+                        _access_token = td['access_token']
+                        _token_expiry = now + td.get('expires_in', 300)
+                        _refresh_token = td.get('refresh_token', _refresh_token)
+                        _token_username = cache_key
+                        logger.debug("OpenSky OAuth token refreshed (client credentials)")
+                        return _access_token
+                    logger.debug("Token refresh rejected (%s), re-authenticating", resp.status_code)
+                except requests.RequestException as e:
+                    logger.warning("Token refresh error: %s", e)
+                _refresh_token = None
+
+            resp = requests.post(OPENSKY_TOKEN_URL, data={
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'grant_type': 'client_credentials',
+            }, timeout=10)
+            resp.raise_for_status()
+            td = resp.json()
+            _access_token = td['access_token']
+            _token_expiry = now + td.get('expires_in', 300)
+            _refresh_token = td.get('refresh_token')
+            _token_username = cache_key
+            logger.info("OpenSky OAuth token acquired via client credentials (id='%s')", client_id)
+            return _access_token
+
+        # --- Resource Owner Password Credentials grant (legacy fallback) ---
         if _refresh_token:
             try:
                 resp = requests.post(OPENSKY_TOKEN_URL, data={
@@ -69,7 +112,7 @@ def _get_token(username, password):
                     _access_token = td['access_token']
                     _token_expiry = now + td.get('expires_in', 300)
                     _refresh_token = td.get('refresh_token', _refresh_token)
-                    _token_username = username
+                    _token_username = cache_key
                     logger.debug("OpenSky OAuth token refreshed")
                     return _access_token
                 logger.debug("Token refresh rejected (%s), re-authenticating", resp.status_code)
@@ -77,7 +120,6 @@ def _get_token(username, password):
                 logger.warning("Token refresh error: %s", e)
             _refresh_token = None
 
-        # Full authentication via Resource Owner Password Credentials grant
         resp = requests.post(OPENSKY_TOKEN_URL, data={
             'client_id': _OPENSKY_CLIENT_ID,
             'grant_type': 'password',
@@ -89,21 +131,26 @@ def _get_token(username, password):
         _access_token = td['access_token']
         _token_expiry = now + td.get('expires_in', 300)
         _refresh_token = td.get('refresh_token')
-        _token_username = username
+        _token_username = cache_key
         logger.info("OpenSky OAuth token acquired for user '%s'", username)
         return _access_token
 
 
 def fetch_aircraft(lat_min, lat_max, lon_min, lon_max,
-                   username='', password='', timeout=15):
+                   username='', password='',
+                   client_id='', client_secret='',
+                   timeout=15):
     """
     Fetch aircraft within bounding box from OpenSky Network.
-    Authenticated requests use OAuth 2.0 bearer tokens (ROPC grant).
+    Authenticated requests use OAuth 2.0 bearer tokens.
+    Prefers Client Credentials grant (client_id + client_secret) when available,
+    falls back to ROPC grant (username + password).
     Returns list of dicts in internal format, or None if rate-limited or error.
     """
     global _last_fetch_time
 
-    min_interval = _MIN_INTERVAL_AUTH if username else _MIN_INTERVAL_ANON
+    is_authenticated = bool(client_id and client_secret) or bool(username)
+    min_interval = _MIN_INTERVAL_AUTH if is_authenticated else _MIN_INTERVAL_ANON
     elapsed = time.time() - _last_fetch_time
     if elapsed < min_interval:
         logger.debug("OpenSky rate limit: %.1fs remaining", min_interval - elapsed)
@@ -116,9 +163,9 @@ def fetch_aircraft(lat_min, lat_max, lon_min, lon_max,
         'lomax': round(lon_max, 4),
     }
 
-    if username:
+    if is_authenticated:
         try:
-            token = _get_token(username, password)
+            token = _get_token(username, password, client_id, client_secret)
             headers = {'Authorization': f'Bearer {token}'}
         except requests.RequestException as e:
             logger.warning("OpenSky OAuth token fetch failed: %s", e)

@@ -95,9 +95,14 @@ def _fetch(cfg):
 
     elif source_type == 'opensky':
         bbox = get_bounding_box()
-        username = cfg['data_source'].get('opensky_username', '')
-        password = cfg['data_source'].get('opensky_password', '')
-        return opensky_client.fetch_aircraft(*bbox, username=username, password=password)
+        ds = cfg['data_source']
+        return opensky_client.fetch_aircraft(
+            *bbox,
+            client_id=ds.get('opensky_client_id', ''),
+            client_secret=ds.get('opensky_client_secret', ''),
+            username=ds.get('opensky_username', ''),
+            password=ds.get('opensky_password', ''),
+        )
 
     else:
         logger.warning("Unknown data source type: %s", source_type)

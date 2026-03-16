@@ -32,6 +32,8 @@ const ConfigPanel = (() => {
     _set('cfg-source',    cfg.data_source.type);
     _set('cfg-d1090-host', cfg.data_source.dump1090_host);
     _set('cfg-d1090-port', cfg.data_source.dump1090_port);
+    _set('cfg-osky-client-id',     cfg.data_source.opensky_client_id);
+    _set('cfg-osky-client-secret', cfg.data_source.opensky_client_secret);
     _set('cfg-osky-user', cfg.data_source.opensky_username);
     _set('cfg-osky-pass', cfg.data_source.opensky_password);
     _set('cfg-poll',      cfg.data_source.poll_interval_seconds);
@@ -93,6 +95,8 @@ const ConfigPanel = (() => {
         type:                    document.getElementById('cfg-source')?.value,
         dump1090_host:           document.getElementById('cfg-d1090-host')?.value,
         dump1090_port:           parseInt(document.getElementById('cfg-d1090-port')?.value, 10),
+        opensky_client_id:       document.getElementById('cfg-osky-client-id')?.value,
+        opensky_client_secret:   document.getElementById('cfg-osky-client-secret')?.value,
         opensky_username:        document.getElementById('cfg-osky-user')?.value,
         opensky_password:        document.getElementById('cfg-osky-pass')?.value,
         poll_interval_seconds:   parseInt(document.getElementById('cfg-poll')?.value, 10),
