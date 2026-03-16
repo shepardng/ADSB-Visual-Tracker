@@ -1,6 +1,7 @@
 import time
-import threading
 import logging
+
+import eventlet
 
 from .aircraft_store import store
 from . import dump1090_client, opensky_client
@@ -9,7 +10,7 @@ from ..config_manager import get_config, get_bounding_box
 logger = logging.getLogger(__name__)
 
 _thread = None
-_stop_event = threading.Event()
+_running = False
 _socketio = None
 _last_push_time = 0
 _last_update_time = 0
@@ -23,15 +24,15 @@ def init(socketio_instance):
 
 
 def start():
-    global _thread, _stop_event
-    _stop_event.clear()
-    _thread = threading.Thread(target=_run_loop, daemon=True, name='data-manager')
-    _thread.start()
+    global _thread, _running
+    _running = True
+    _thread = _socketio.start_background_task(_run_loop)
     logger.info("Data manager started")
 
 
 def stop():
-    _stop_event.set()
+    global _running
+    _running = False
 
 
 def get_status():
@@ -47,7 +48,7 @@ def get_status():
 def _run_loop():
     global _last_push_time, _last_update_time, _last_error
 
-    while not _stop_event.is_set():
+    while _running:
         cfg = get_config()
         interval = cfg['data_source'].get('poll_interval_seconds', 10)
 
@@ -81,7 +82,7 @@ def _run_loop():
             _last_error = str(e)
             logger.error("Data manager error: %s", e, exc_info=True)
 
-        _stop_event.wait(timeout=interval)
+        eventlet.sleep(interval)
 
 
 def _fetch(cfg):
