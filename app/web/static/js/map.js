@@ -4,7 +4,7 @@
 
 'use strict';
 
-const Map = (() => {
+const AircraftMap = (() => {
   let _map = null;
   let _config = null;
 
@@ -307,4 +307,4 @@ const Map = (() => {
   // Expose
   // ------------------------------------------------------------------
   return { init, update, recenter, applyTheme, applyProjectionTransform };
-})();
+})();  // AircraftMap
