@@ -86,6 +86,10 @@ sudo -u "$APP_USER" "$VENV_DIR/bin/pip" install --upgrade pip -q
 sudo -u "$APP_USER" "$VENV_DIR/bin/pip" install -r "$REPO_DIR/requirements.txt" -q
 ok "Python dependencies installed."
 
+info "Downloading frontend vendor assets (Leaflet, Socket.IO)…"
+sudo -u "$APP_USER" "$VENV_DIR/bin/python" "$REPO_DIR/download_vendor.py" || \
+    warn "Vendor download failed — will retry on first app launch."
+
 # ---------------------------------------------------------------------------
 # 4. systemd service
 # ---------------------------------------------------------------------------

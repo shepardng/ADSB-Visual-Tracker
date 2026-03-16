@@ -13,6 +13,7 @@ import os
 from app import create_app, socketio
 from app.adsb import data_manager
 from app.config_manager import load_config
+from download_vendor import download_vendor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    download_vendor()   # no-op if files already present; downloads on first run
     load_config()
 
     app = create_app()
