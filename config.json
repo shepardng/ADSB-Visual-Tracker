@@ -24,6 +24,7 @@
     "trail_length": 10,
     "show_labels": true,
     "label_fields": ["callsign", "altitude", "speed"],
+    "show_range_ring": true,
     "ceiling_flip_vertical": false,
     "ceiling_rotate_180": false,
     "zoom_level": 9

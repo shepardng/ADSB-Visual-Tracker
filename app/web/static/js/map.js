@@ -199,6 +199,8 @@ const AircraftMap = (() => {
     if (_centerMarker) { _map.removeLayer(_centerMarker); _centerMarker = null; }
     if (_rangeCircle)  { _map.removeLayer(_rangeCircle);  _rangeCircle  = null; }
 
+    if (cfg.display.show_range_ring === false) return;
+
     const lat = cfg.location.latitude;
     const lon = cfg.location.longitude;
     const r   = cfg.location.radius_km * 1000; // metres

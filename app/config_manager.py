@@ -31,6 +31,7 @@ DEFAULT_CONFIG = {
         "trail_length": 10,
         "show_labels": True,
         "label_fields": ["callsign", "altitude", "speed"],
+        "show_range_ring": True,
         "ceiling_flip_vertical": False,
         "ceiling_rotate_180": False,
         "zoom_level": 9
