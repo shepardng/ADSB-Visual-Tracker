@@ -39,10 +39,12 @@ const ConfigPanel = (() => {
     _set('cfg-poll',      cfg.data_source.poll_interval_seconds);
 
     _set('cfg-theme',     cfg.display.theme);
+    _set('cfg-basemap',   cfg.display.basemap);
     _chk('cfg-trails',    cfg.display.show_trails);
     _set('cfg-trail-len', cfg.display.trail_length);
-    _chk('cfg-labels',    cfg.display.show_labels);
-    _set('cfg-zoom',      cfg.display.zoom_level);
+    _chk('cfg-labels',      cfg.display.show_labels);
+    _chk('cfg-range-ring',  cfg.display.show_range_ring);
+    _set('cfg-zoom',        cfg.display.zoom_level);
     _setZoomLabel(cfg.display.zoom_level);
 
     _chk('cfg-flip-v',    cfg.display.ceiling_flip_vertical);
@@ -105,9 +107,11 @@ const ConfigPanel = (() => {
       },
       display: {
         theme:                  document.getElementById('cfg-theme')?.value,
+        basemap:                document.getElementById('cfg-basemap')?.value,
         show_trails:            document.getElementById('cfg-trails')?.checked,
         trail_length:           parseInt(document.getElementById('cfg-trail-len')?.value, 10),
         show_labels:            document.getElementById('cfg-labels')?.checked,
+        show_range_ring:        document.getElementById('cfg-range-ring')?.checked,
         zoom_level:             parseInt(document.getElementById('cfg-zoom')?.value, 10),
         ceiling_flip_vertical:  document.getElementById('cfg-flip-v')?.checked,
         ceiling_rotate_180:     document.getElementById('cfg-rot-180')?.checked,

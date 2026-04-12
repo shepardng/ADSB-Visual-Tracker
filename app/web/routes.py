@@ -17,8 +17,12 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static')
 TILE_CACHE_DIR = os.path.join(os.path.expanduser('~'), '.adsb-tracker', 'tiles')
 
 _TILE_CDN = {
-    'dark': 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-    'light': 'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    'dark':     'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+    'light':    'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    # ArcGIS Specialty charts — note URL order is {z}/{y}/{x} (row/col), not {z}/{x}/{y}
+    'vfr':      'https://server.arcgisonline.com/ArcGIS/rest/services/Specialty/World_Aeronautical_Charts/MapServer/tile/{z}/{y}/{x}',
+    'ifr_low':  'https://server.arcgisonline.com/ArcGIS/rest/services/Specialty/World_Navigation_Charts/MapServer/tile/{z}/{y}/{x}',
+    'ifr_high': 'https://server.arcgisonline.com/ArcGIS/rest/services/Specialty/World_Navigation_Charts/MapServer/tile/{z}/{y}/{x}',
 }
 
 _tile_cache_thread = None
@@ -72,8 +76,38 @@ def update_config():
 # Skylink aircraft photo proxy (keeps API key server-side)
 # ---------------------------------------------------------------------------
 
-_SKYLINK_BASE = 'https://skylinkapi.com/v3/aircraft/icao24/{icao}'
+_SKYLINK_REG_URL   = 'https://skylinkapi.com/v3/aircraft/registration/{reg}'
+_SKYLINK_ICAO_URL  = 'https://skylinkapi.com/v3/aircraft/icao24/{icao}'
 _photo_cache = {}  # icao -> response dict, simple in-process cache
+
+
+def _skylink_get(url, api_key):
+    """GET a Skylink endpoint. Returns parsed JSON or None on failure."""
+    try:
+        resp = req_lib.get(url, params={'photos': 'true'},
+                           headers={'X-RapidAPI-Key': api_key},
+                           timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.debug("Skylink request failed (%s): %s", url, e)
+        return None
+
+
+def _extract_photo(data):
+    """Pull the relevant fields out of a successful Skylink response."""
+    aircraft = data.get('aircraft', {})
+    photos = aircraft.get('photos') or []
+    photo = photos[0] if photos else None
+    return {
+        'found':          True,
+        'image':          photo.get('image')        if photo else None,
+        'link':           photo.get('link')         if photo else None,
+        'photographer':   photo.get('photographer') if photo else None,
+        'registration':   aircraft.get('registration'),
+        'type_name':      aircraft.get('type_name'),
+        'owner_operator': aircraft.get('owner_operator'),
+    }
 
 
 @api_bp.route('/api/aircraft/<icao>/photo')
@@ -88,35 +122,33 @@ def get_aircraft_photo(icao):
     if icao in _photo_cache:
         return jsonify(_photo_cache[icao])
 
-    url = _SKYLINK_BASE.format(icao=icao.lower())
-    try:
-        resp = req_lib.get(url, params={'photos': 'true'},
-                           headers={'X-RapidAPI-Key': api_key},
-                           timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        logger.warning("Skylink photo fetch failed for %s: %s", icao, e)
-        return jsonify({'found': False, 'error': str(e)}), 200
+    # Grab the callsign from the live store so we can try a registration lookup
+    callsign = next(
+        (ac.get('callsign') for ac in store.get_all() if ac.get('icao') == icao),
+        None
+    )
 
-    if not data.get('found'):
+    result = None
+
+    # 1. Try registration lookup first (callsign == registration for GA aircraft)
+    if callsign:
+        data = _skylink_get(_SKYLINK_REG_URL.format(reg=callsign), api_key)
+        if data and data.get('found'):
+            result = _extract_photo(data)
+            logger.debug("Skylink: found %s via registration '%s'", icao, callsign)
+
+    # 2. Fall back to ICAO24 lookup
+    if result is None:
+        data = _skylink_get(_SKYLINK_ICAO_URL.format(icao=icao.lower()), api_key)
+        if data and data.get('found'):
+            result = _extract_photo(data)
+            logger.debug("Skylink: found %s via ICAO24", icao)
+        elif data is None:
+            logger.warning("Skylink: both lookups failed for %s", icao)
+
+    if result is None:
         result = {'found': False}
-        _photo_cache[icao] = result
-        return jsonify(result)
 
-    aircraft = data.get('aircraft', {})
-    photos = aircraft.get('photos') or []
-    photo = photos[0] if photos else None
-
-    result = {
-        'found': True,
-        'image':        photo.get('image')       if photo else None,
-        'link':         photo.get('link')        if photo else None,
-        'photographer': photo.get('photographer') if photo else None,
-        'registration':    aircraft.get('registration'),
-        'type_name':       aircraft.get('type_name'),
-        'owner_operator':  aircraft.get('owner_operator'),
-    }
     _photo_cache[icao] = result
     return jsonify(result)
 
@@ -129,10 +161,10 @@ def get_aircraft_photo(icao):
 def serve_tile(z, x, y):
     """Serve a locally cached tile; fetch from CDN on cache miss."""
     cfg = get_config()
-    theme = cfg['display'].get('theme', 'dark')
-    theme_key = 'dark' if theme == 'dark' else 'light'
+    basemap = cfg['display'].get('basemap', 'dark')
+    basemap_key = basemap if basemap in _TILE_CDN else 'dark'
 
-    tile_dir = os.path.join(TILE_CACHE_DIR, theme_key, str(z), str(x))
+    tile_dir = os.path.join(TILE_CACHE_DIR, basemap_key, str(z), str(x))
     tile_file = f'{y}.png'
     tile_path = os.path.join(tile_dir, tile_file)
 
@@ -142,7 +174,7 @@ def serve_tile(z, x, y):
                                    mimetype='image/png')
 
     # Cache miss — fetch from CDN
-    cdn_url = _TILE_CDN[theme_key].replace('{z}', str(z)).replace('{x}', str(x)).replace('{y}', str(y))
+    cdn_url = _TILE_CDN[basemap_key].replace('{z}', str(z)).replace('{x}', str(x)).replace('{y}', str(y))
     try:
         resp = req_lib.get(cdn_url, timeout=8,
                            headers={'User-Agent': 'ADSB-Visual-Tracker/1.0'})
@@ -176,13 +208,14 @@ def start_tile_cache():
     lat = cfg['location']['latitude']
     lon = cfg['location']['longitude']
     radius_km = cfg['location']['radius_km']
-    theme = cfg['display'].get('theme', 'dark')
+    basemap = cfg['display'].get('basemap', 'dark')
+    basemap = basemap if basemap in _TILE_CDN else 'dark'
 
     _tile_cache_progress = {'status': 'running', 'fetched': 0, 'total': 0, 'error': None}
 
     def _run():
         try:
-            _cache_tiles_bg(lat, lon, radius_km, theme)
+            _cache_tiles_bg(lat, lon, radius_km, basemap)
             _tile_cache_progress['status'] = 'done'
         except Exception as e:
             _tile_cache_progress['status'] = 'error'
@@ -198,11 +231,11 @@ def tile_cache_status():
     return jsonify(_tile_cache_progress)
 
 
-def _cache_tiles_bg(lat, lon, radius_km, theme, zoom_min=6, zoom_max=12):
+def _cache_tiles_bg(lat, lon, radius_km, basemap, zoom_min=6, zoom_max=12):
     import math
 
-    cdn = _TILE_CDN['dark' if theme == 'dark' else 'light']
-    theme_key = 'dark' if theme == 'dark' else 'light'
+    basemap_key = basemap if basemap in _TILE_CDN else 'dark'
+    cdn = _TILE_CDN[basemap_key]
 
     lat_delta = radius_km / 111.32
     lon_delta = radius_km / (111.32 * math.cos(math.radians(lat)))
@@ -232,7 +265,7 @@ def _cache_tiles_bg(lat, lon, radius_km, theme, zoom_min=6, zoom_max=12):
 
         for x in range(max(0, x1), min(n, x2 + 1)):
             for y in range(max(0, y1), min(n, y2 + 1)):
-                tile_dir = os.path.join(TILE_CACHE_DIR, theme_key, str(z), str(x))
+                tile_dir = os.path.join(TILE_CACHE_DIR, basemap_key, str(z), str(x))
                 tile_path = os.path.join(tile_dir, f'{y}.png')
 
                 if os.path.exists(tile_path):
