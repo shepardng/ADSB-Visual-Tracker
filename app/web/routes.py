@@ -72,8 +72,38 @@ def update_config():
 # Skylink aircraft photo proxy (keeps API key server-side)
 # ---------------------------------------------------------------------------
 
-_SKYLINK_BASE = 'https://skylinkapi.com/v3/aircraft/icao24/{icao}'
+_SKYLINK_REG_URL   = 'https://skylinkapi.com/v3/aircraft/registration/{reg}'
+_SKYLINK_ICAO_URL  = 'https://skylinkapi.com/v3/aircraft/icao24/{icao}'
 _photo_cache = {}  # icao -> response dict, simple in-process cache
+
+
+def _skylink_get(url, api_key):
+    """GET a Skylink endpoint. Returns parsed JSON or None on failure."""
+    try:
+        resp = req_lib.get(url, params={'photos': 'true'},
+                           headers={'X-RapidAPI-Key': api_key},
+                           timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        logger.debug("Skylink request failed (%s): %s", url, e)
+        return None
+
+
+def _extract_photo(data):
+    """Pull the relevant fields out of a successful Skylink response."""
+    aircraft = data.get('aircraft', {})
+    photos = aircraft.get('photos') or []
+    photo = photos[0] if photos else None
+    return {
+        'found':          True,
+        'image':          photo.get('image')        if photo else None,
+        'link':           photo.get('link')         if photo else None,
+        'photographer':   photo.get('photographer') if photo else None,
+        'registration':   aircraft.get('registration'),
+        'type_name':      aircraft.get('type_name'),
+        'owner_operator': aircraft.get('owner_operator'),
+    }
 
 
 @api_bp.route('/api/aircraft/<icao>/photo')
@@ -88,35 +118,33 @@ def get_aircraft_photo(icao):
     if icao in _photo_cache:
         return jsonify(_photo_cache[icao])
 
-    url = _SKYLINK_BASE.format(icao=icao.lower())
-    try:
-        resp = req_lib.get(url, params={'photos': 'true'},
-                           headers={'X-RapidAPI-Key': api_key},
-                           timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        logger.warning("Skylink photo fetch failed for %s: %s", icao, e)
-        return jsonify({'found': False, 'error': str(e)}), 200
+    # Grab the callsign from the live store so we can try a registration lookup
+    callsign = next(
+        (ac.get('callsign') for ac in store.get_all() if ac.get('icao') == icao),
+        None
+    )
 
-    if not data.get('found'):
+    result = None
+
+    # 1. Try registration lookup first (callsign == registration for GA aircraft)
+    if callsign:
+        data = _skylink_get(_SKYLINK_REG_URL.format(reg=callsign), api_key)
+        if data and data.get('found'):
+            result = _extract_photo(data)
+            logger.debug("Skylink: found %s via registration '%s'", icao, callsign)
+
+    # 2. Fall back to ICAO24 lookup
+    if result is None:
+        data = _skylink_get(_SKYLINK_ICAO_URL.format(icao=icao.lower()), api_key)
+        if data and data.get('found'):
+            result = _extract_photo(data)
+            logger.debug("Skylink: found %s via ICAO24", icao)
+        elif data is None:
+            logger.warning("Skylink: both lookups failed for %s", icao)
+
+    if result is None:
         result = {'found': False}
-        _photo_cache[icao] = result
-        return jsonify(result)
 
-    aircraft = data.get('aircraft', {})
-    photos = aircraft.get('photos') or []
-    photo = photos[0] if photos else None
-
-    result = {
-        'found': True,
-        'image':        photo.get('image')       if photo else None,
-        'link':         photo.get('link')        if photo else None,
-        'photographer': photo.get('photographer') if photo else None,
-        'registration':    aircraft.get('registration'),
-        'type_name':       aircraft.get('type_name'),
-        'owner_operator':  aircraft.get('owner_operator'),
-    }
     _photo_cache[icao] = result
     return jsonify(result)
 
