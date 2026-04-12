@@ -19,6 +19,7 @@
   },
   "display": {
     "theme": "dark",
+    "basemap": "dark",
     "show_trails": true,
     "trail_length": 10,
     "show_labels": true,

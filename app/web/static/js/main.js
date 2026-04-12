@@ -136,7 +136,7 @@ let toggleConfig, enterPresentationMode, exitPresentationMode,
   Main.onConfigSaved = function (newCfg) {
     SocketClient.updateConfig(newCfg);
     AircraftMap.recenter(newCfg);
-    AircraftMap.applyTheme(newCfg.display.theme);
+    AircraftMap.applyTheme(newCfg.display.theme, newCfg.display.basemap);
     AircraftMap.applyProjectionTransform(
       newCfg.display.ceiling_flip_vertical,
       newCfg.display.ceiling_rotate_180

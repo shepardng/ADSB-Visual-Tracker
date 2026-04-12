@@ -26,6 +26,7 @@ DEFAULT_CONFIG = {
     },
     "display": {
         "theme": "dark",
+        "basemap": "dark",
         "show_trails": True,
         "trail_length": 10,
         "show_labels": True,

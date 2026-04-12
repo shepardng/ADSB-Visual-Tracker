@@ -11,11 +11,15 @@ const AircraftMap = (() => {
   // icao -> { marker, trail, data }
   const _aircraft = {};
 
-  const TILE_URL_DARK  = '/tiles/{z}/{x}/{y}.png';
-  const TILE_URL_LIGHT = '/tiles/{z}/{x}/{y}.png';  // proxy handles theme
+  const TILE_URL = '/tiles/{z}/{x}/{y}.png';  // proxy handles basemap selection
 
-  const TILE_ATTRIB_DARK  = '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>';
-  const TILE_ATTRIB_LIGHT = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+  const TILE_ATTRIB = {
+    dark:     '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+    light:    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    vfr:      'Sources: Esri, &copy; <a href="https://www.esri.com/">Esri</a>, FAA, NGA, USGS',
+    ifr_low:  'Sources: Esri, &copy; <a href="https://www.esri.com/">Esri</a>, FAA, NGA',
+    ifr_high: 'Sources: Esri, &copy; <a href="https://www.esri.com/">Esri</a>, FAA, NGA',
+  };
 
   let _tileLayer = null;
   let _centerMarker = null;
@@ -160,7 +164,7 @@ const AircraftMap = (() => {
       attributionControl: true,
     }).setView([cfg.location.latitude, cfg.location.longitude], cfg.display.zoom_level);
 
-    _applyTileLayer(cfg.display.theme);
+    _applyTileLayer(cfg.display.basemap || cfg.display.theme);
     _applyRangeOverlay(cfg);
 
     // Load aircraft photo when any popup opens
@@ -175,14 +179,14 @@ const AircraftMap = (() => {
   }
 
   // ------------------------------------------------------------------
-  // Swap tile layer when theme changes
+  // Swap tile layer when basemap changes
   // ------------------------------------------------------------------
-  function _applyTileLayer(theme) {
+  function _applyTileLayer(basemap) {
     if (_tileLayer) {
       _map.removeLayer(_tileLayer);
     }
-    const attrib = theme === 'dark' ? TILE_ATTRIB_DARK : TILE_ATTRIB_LIGHT;
-    _tileLayer = L.tileLayer(TILE_URL_DARK, {
+    const attrib = TILE_ATTRIB[basemap] || TILE_ATTRIB.dark;
+    _tileLayer = L.tileLayer(TILE_URL, {
       maxZoom: 19,
       attribution: attrib,
     }).addTo(_map);
@@ -330,10 +334,10 @@ const AircraftMap = (() => {
   }
 
   // ------------------------------------------------------------------
-  // Apply theme change
+  // Apply theme / basemap change
   // ------------------------------------------------------------------
-  function applyTheme(theme) {
-    _applyTileLayer(theme);
+  function applyTheme(theme, basemap) {
+    _applyTileLayer(basemap || theme);
   }
 
   // ------------------------------------------------------------------

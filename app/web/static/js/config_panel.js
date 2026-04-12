@@ -39,6 +39,7 @@ const ConfigPanel = (() => {
     _set('cfg-poll',      cfg.data_source.poll_interval_seconds);
 
     _set('cfg-theme',     cfg.display.theme);
+    _set('cfg-basemap',   cfg.display.basemap);
     _chk('cfg-trails',    cfg.display.show_trails);
     _set('cfg-trail-len', cfg.display.trail_length);
     _chk('cfg-labels',    cfg.display.show_labels);
@@ -105,6 +106,7 @@ const ConfigPanel = (() => {
       },
       display: {
         theme:                  document.getElementById('cfg-theme')?.value,
+        basemap:                document.getElementById('cfg-basemap')?.value,
         show_trails:            document.getElementById('cfg-trails')?.checked,
         trail_length:           parseInt(document.getElementById('cfg-trail-len')?.value, 10),
         show_labels:            document.getElementById('cfg-labels')?.checked,
