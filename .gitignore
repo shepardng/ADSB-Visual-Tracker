@@ -1,6 +1,6 @@
 # Personal configuration — contains API keys, coordinates, etc.
 config.json
-
+ 
 # Python
 __pycache__/
 *.py[cod]
@@ -8,10 +8,10 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
-
+ 
 # Tile cache
 ~/.adsb-tracker/
-
+ 
 # OS
 .DS_Store
 Thumbs.db
