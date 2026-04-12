@@ -69,6 +69,59 @@ def update_config():
 
 
 # ---------------------------------------------------------------------------
+# Skylink aircraft photo proxy (keeps API key server-side)
+# ---------------------------------------------------------------------------
+
+_SKYLINK_BASE = 'https://skylinkapi.com/v3/aircraft/icao24/{icao}'
+_photo_cache = {}  # icao -> response dict, simple in-process cache
+
+
+@api_bp.route('/api/aircraft/<icao>/photo')
+def get_aircraft_photo(icao):
+    icao = icao.upper()
+    cfg = get_config()
+    api_key = cfg.get('integrations', {}).get('skylink_api_key', '')
+
+    if not api_key:
+        return jsonify({'found': False, 'error': 'No Skylink API key configured'}), 200
+
+    if icao in _photo_cache:
+        return jsonify(_photo_cache[icao])
+
+    url = _SKYLINK_BASE.format(icao=icao.lower())
+    try:
+        resp = req_lib.get(url, params={'photos': 'true'},
+                           headers={'X-RapidAPI-Key': api_key},
+                           timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        logger.warning("Skylink photo fetch failed for %s: %s", icao, e)
+        return jsonify({'found': False, 'error': str(e)}), 200
+
+    if not data.get('found'):
+        result = {'found': False}
+        _photo_cache[icao] = result
+        return jsonify(result)
+
+    aircraft = data.get('aircraft', {})
+    photos = aircraft.get('photos') or []
+    photo = photos[0] if photos else None
+
+    result = {
+        'found': True,
+        'image':        photo.get('image')       if photo else None,
+        'link':         photo.get('link')        if photo else None,
+        'photographer': photo.get('photographer') if photo else None,
+        'registration':    aircraft.get('registration'),
+        'type_name':       aircraft.get('type_name'),
+        'owner_operator':  aircraft.get('owner_operator'),
+    }
+    _photo_cache[icao] = result
+    return jsonify(result)
+
+
+# ---------------------------------------------------------------------------
 # Tile proxy with local cache
 # ---------------------------------------------------------------------------
 

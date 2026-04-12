@@ -52,6 +52,8 @@ const ConfigPanel = (() => {
     _set('cfg-max-alt',   cfg.filters.max_altitude_ft);
     _chk('cfg-ground',    cfg.filters.show_ground_vehicles);
 
+    _set('cfg-skylink-key', cfg.integrations?.skylink_api_key);
+
     onSourceChange();
   }
 
@@ -114,6 +116,9 @@ const ConfigPanel = (() => {
         min_altitude_ft:        parseInt(document.getElementById('cfg-min-alt')?.value, 10),
         max_altitude_ft:        parseInt(document.getElementById('cfg-max-alt')?.value, 10),
         show_ground_vehicles:   document.getElementById('cfg-ground')?.checked,
+      },
+      integrations: {
+        skylink_api_key: document.getElementById('cfg-skylink-key')?.value,
       },
     };
   }
