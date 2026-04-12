@@ -112,7 +112,41 @@ const AircraftMap = (() => {
       `<div class="popup-row"><span class="popup-key">${k}</span><span class="popup-val">${v}</span></div>`
     ).join('');
 
-    return `<div class="popup-callsign">${ac.callsign || ac.icao}</div>${rowsHtml}`;
+    return `<div class="popup-callsign">${ac.callsign || ac.icao}</div>${rowsHtml}`
+      + `<div class="popup-photo" data-icao="${ac.icao}"><span class="photo-loading">Loading photo\u2026</span></div>`;
+  }
+
+  // ------------------------------------------------------------------
+  // In-browser photo cache — avoids re-fetching on repeat popup opens
+  // ------------------------------------------------------------------
+  const _photoCache = {};  // icao -> photo data or null
+
+  async function _loadPhoto(icao, photoDiv) {
+    if (icao in _photoCache) {
+      _renderPhoto(photoDiv, _photoCache[icao]);
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/aircraft/${icao}/photo`);
+      const data = await resp.json();
+      _photoCache[icao] = data.found && data.image ? data : null;
+      _renderPhoto(photoDiv, _photoCache[icao]);
+    } catch (_) {
+      photoDiv.innerHTML = '<span class="photo-loading">Photo unavailable</span>';
+    }
+  }
+
+  function _renderPhoto(photoDiv, data) {
+    if (!data || !data.image) {
+      photoDiv.innerHTML = '<span class="photo-loading">No photo on file</span>';
+      return;
+    }
+    const credit = data.photographer ? `Photo: ${data.photographer}` : '';
+    photoDiv.innerHTML =
+      `<a href="${data.link || data.image}" target="_blank" rel="noopener noreferrer">`
+      + `<img src="${data.image}" alt="Aircraft photo" class="popup-aircraft-img">`
+      + `</a>`
+      + (credit ? `<div class="photo-credit">${credit}</div>` : '');
   }
 
   // ------------------------------------------------------------------
@@ -128,6 +162,16 @@ const AircraftMap = (() => {
 
     _applyTileLayer(cfg.display.theme);
     _applyRangeOverlay(cfg);
+
+    // Load aircraft photo when any popup opens
+    _map.on('popupopen', (e) => {
+      const el = e.popup.getElement();
+      if (!el) return;
+      const photoDiv = el.querySelector('.popup-photo');
+      if (!photoDiv) return;
+      const icao = photoDiv.dataset.icao;
+      if (icao) _loadPhoto(icao, photoDiv);
+    });
   }
 
   // ------------------------------------------------------------------
@@ -239,7 +283,7 @@ const AircraftMap = (() => {
       // New aircraft
       const marker = L.marker([lat, lon], { icon: buildIcon(ac.heading_deg, color) })
         .addTo(_map)
-        .bindPopup(buildPopup(ac), { maxWidth: 260 });
+        .bindPopup(buildPopup(ac), { maxWidth: 300 });
 
       if (showLabels) {
         marker.bindTooltip(buildLabelText(ac, labelFields), {

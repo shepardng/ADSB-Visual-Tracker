@@ -21,6 +21,9 @@ DEFAULT_CONFIG = {
         "opensky_password": "",
         "poll_interval_seconds": 10
     },
+    "integrations": {
+        "skylink_api_key": ""
+    },
     "display": {
         "theme": "dark",
         "show_trails": True,
